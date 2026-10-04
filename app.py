@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Interface Streamlit pour la comparaison des méthodes de pricing d'options.
+Presets : Bitcoin et Soja (soybean futures).
 """
 
 import time
@@ -9,9 +10,10 @@ import streamlit as st
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 from scipy.linalg import solve_banded
+import pandas as pd
 
 # ---------------------------------------------------------------------------
-# Fonctions de pricing (identiques à option_pricing.py)
+# Fonctions de pricing
 # ---------------------------------------------------------------------------
 
 def black_scholes_call(S, K, T, r, sigma):
@@ -77,6 +79,35 @@ def pde_crank_nicolson_call(S0, K, T, r, sigma, S_max=None, M=200, N=200):
 
 
 # ---------------------------------------------------------------------------
+# Presets marché (données approximatives début octobre 2026)
+# ---------------------------------------------------------------------------
+PRESETS = {
+    "Personnalisé": {
+        "S0": 100.0, "K": 100.0, "T": 1.0, "r": 0.05, "sigma": 0.20,
+        "note": "Paramètres libres",
+        "unit": "",
+    },
+    "Bitcoin (BTC)": {
+        "S0": 85300.0,      # ~ prix spot USD début oct. 2026
+        "K": 85000.0,       # strike ATM-ish
+        "T": 30/365,        # 1 mois
+        "r": 0.05,          # taux sans risque ≈ 5 %
+        "sigma": 0.35,      # IV ATM ~ 30-38 % (Deribit / réalisées ~28-45 %)
+        "note": "Call européen 1 mois ATM — vol ~35 % (marché options crypto)",
+        "unit": "USD",
+    },
+    "Soja (Soybean ZS)": {
+        "S0": 12.78,        # futures ~1278 ¢/bu = 12.78 USD/bu
+        "K": 12.80,
+        "T": 60/365,        # ~2 mois (vers expiration Nov)
+        "r": 0.05,
+        "sigma": 0.21,      # CVOL / réalisée ~20-22 %
+        "note": "Call sur futures soja CBOT — vol ~21 % (CVOL / GARCH)",
+        "unit": "USD/bu",
+    },
+}
+
+# ---------------------------------------------------------------------------
 # Interface Streamlit
 # ---------------------------------------------------------------------------
 
@@ -89,18 +120,48 @@ st.set_page_config(
 st.title("📈 Comparaison des méthodes de pricing d'options")
 st.markdown(
     "Comparez en temps réel la **formule de Black-Scholes**, "
-    "la **simulation Monte Carlo** et la résolution de l'**EDP** (Crank-Nicolson) "
-    "sur la précision et le temps de calcul."
+    "la **simulation Monte Carlo** et la résolution de l'**EDP** (Crank-Nicolson). "
+    "Presets disponibles pour **Bitcoin** et **Soja**."
 )
 
-# --- Sidebar : paramètres ---
-st.sidebar.header("Paramètres de l'option")
+# --- Sidebar ---
+st.sidebar.header("Sous-jacent")
+preset_name = st.sidebar.selectbox(
+    "Preset marché",
+    list(PRESETS.keys()),
+    index=0,
+    help="Charge des paramètres réalistes pour Bitcoin ou Soja",
+)
+preset = PRESETS[preset_name]
+st.sidebar.caption(preset["note"])
 
-S0 = st.sidebar.number_input("Spot \(S_0\)", min_value=1.0, value=100.0, step=1.0)
-K = st.sidebar.number_input("Strike \(K\)", min_value=1.0, value=100.0, step=1.0)
-T = st.sidebar.number_input("Maturité \(T\) (années)", min_value=0.01, value=1.0, step=0.05)
-r = st.sidebar.slider("Taux sans risque \(r\)", 0.0, 0.20, 0.05, 0.005)
-sigma = st.sidebar.slider("Volatilité \(\sigma\)", 0.01, 1.0, 0.20, 0.01)
+st.sidebar.header("Paramètres de l'option")
+S0 = st.sidebar.number_input(
+    f"Spot / Futures \(S_0\) ({preset['unit']})",
+    min_value=0.01,
+    value=float(preset["S0"]),
+    step=1.0 if preset["S0"] > 100 else 0.01,
+    format="%.2f",
+)
+K = st.sidebar.number_input(
+    f"Strike \(K\) ({preset['unit']})",
+    min_value=0.01,
+    value=float(preset["K"]),
+    step=1.0 if preset["K"] > 100 else 0.01,
+    format="%.2f",
+)
+T = st.sidebar.number_input(
+    "Maturité \(T\) (années)",
+    min_value=0.01,
+    value=float(preset["T"]),
+    step=0.01,
+    format="%.4f",
+)
+r = st.sidebar.slider("Taux sans risque \(r\)", 0.0, 0.15, float(preset["r"]), 0.005)
+sigma = st.sidebar.slider(
+    "Volatilité \(\sigma\)",
+    0.05, 1.50, float(preset["sigma"]), 0.01,
+)
 
 st.sidebar.header("Paramètres numériques")
 n_paths = st.sidebar.select_slider(
@@ -116,21 +177,18 @@ grid_size = st.sidebar.select_slider(
 
 run = st.sidebar.button("Lancer la comparaison", type="primary", use_container_width=True)
 
-# --- Corps principal ---
+# --- Calcul ---
 if run or "results" not in st.session_state:
     with st.spinner("Calcul en cours…"):
-        # 1. Formule
         t0 = time.perf_counter()
         price_bs = black_scholes_call(S0, K, T, r, sigma)
         t_bs = time.perf_counter() - t0
 
-        # 2. Monte Carlo
         t0 = time.perf_counter()
         price_mc, stderr_mc = monte_carlo_call(S0, K, T, r, sigma, n_paths=n_paths)
         t_mc = time.perf_counter() - t0
         err_mc = abs(price_mc - price_bs)
 
-        # 3. EDP
         t0 = time.perf_counter()
         price_pde = pde_crank_nicolson_call(S0, K, T, r, sigma, M=grid_size, N=grid_size)
         t_pde = time.perf_counter() - t0
@@ -142,17 +200,24 @@ if run or "results" not in st.session_state:
             "price_pde": price_pde, "err_pde": err_pde, "t_pde": t_pde,
             "n_paths": n_paths, "grid_size": grid_size,
             "params": (S0, K, T, r, sigma),
+            "preset": preset_name,
+            "unit": preset["unit"],
         }
 
 res = st.session_state.results
+unit = res.get("unit", "")
 
-# --- Métriques principales ---
+# --- Bannière preset ---
+if res.get("preset") and res["preset"] != "Personnalisé":
+    st.info(f"**Preset actif :** {res['preset']} — {PRESETS[res['preset']]['note']}")
+
+# --- Métriques ---
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.metric(
         "Black-Scholes (formule)",
-        f"{res['price_bs']:.6f}",
+        f"{res['price_bs']:.4f} {unit}",
         help="Prix exact (référence)",
     )
     st.caption(f"Temps : {res['t_bs']*1000:.2f} ms")
@@ -160,8 +225,8 @@ with col1:
 with col2:
     st.metric(
         "Monte Carlo",
-        f"{res['price_mc']:.6f}",
-        delta=f"{res['err_mc']:.6f}",
+        f"{res['price_mc']:.4f} {unit}",
+        delta=f"{res['err_mc']:.4f}",
         delta_color="inverse",
         help=f"Erreur abs. vs BS | stderr ≈ {res['stderr_mc']:.5f}",
     )
@@ -170,8 +235,8 @@ with col2:
 with col3:
     st.metric(
         "EDP Crank-Nicolson",
-        f"{res['price_pde']:.6f}",
-        delta=f"{res['err_pde']:.6f}",
+        f"{res['price_pde']:.4f} {unit}",
+        delta=f"{res['err_pde']:.4f}",
         delta_color="inverse",
         help="Erreur abs. vs BS",
     )
@@ -179,10 +244,9 @@ with col3:
 
 st.divider()
 
-# --- Tableau récapitulatif ---
+# --- Tableau ---
 st.subheader("Tableau comparatif")
 
-import pandas as pd
 df = pd.DataFrame([
     {
         "Méthode": "Black-Scholes (formule)",
@@ -216,14 +280,12 @@ st.dataframe(
     hide_index=True,
 )
 
-# --- Graphiques de convergence (optionnels, plus lourds) ---
+# --- Convergence ---
 st.subheader("Courbes de convergence")
-
 show_conv = st.checkbox("Afficher les courbes de convergence (peut prendre quelques secondes)", value=False)
 
 if show_conv:
     with st.spinner("Calcul des courbes…"):
-        # Monte Carlo pour plusieurs N
         mc_Ns = [10_000, 50_000, 100_000, 250_000, 500_000]
         mc_errs, mc_times = [], []
         for n in mc_Ns:
@@ -232,7 +294,6 @@ if show_conv:
             mc_times.append(time.perf_counter() - t0)
             mc_errs.append(abs(p - res["price_bs"]))
 
-        # EDP pour plusieurs grilles
         pde_Ms = [50, 100, 200, 300, 400]
         pde_errs, pde_times = [], []
         for m in pde_Ms:
@@ -268,7 +329,27 @@ if show_conv:
         st.pyplot(fig)
         plt.close()
 
-# --- Explications ---
+# --- Notes spécifiques ---
+with st.expander("Notes sur Bitcoin et Soja"):
+    st.markdown("""
+**Bitcoin (BTC)**  
+- Prix spot ~ 85 300 USD (début octobre 2026).  
+- Volatilité implicite ATM options Deribit typiquement 30–40 % (1 mois) ; réalisée 30j souvent 28–45 %.  
+- Taux sans risque ~ 5 %.  
+- Pas de dividende → modèle Black-Scholes classique adapté.  
+- Attention : jumps et vol stochastique importants → BS est une approximation.
+
+**Soja (Soybean futures ZS – CBOT)**  
+- Prix futures Nov ~ 1 278 ¢/bu ≈ **12,78 USD/bu**.  
+- Volatilité (CVOL / GARCH) ~ 20–22 %.  
+- Options sur futures → en pratique on utilise souvent Black-76 (équivalent à BS avec \( q = r \)).  
+- Ici on applique BS « cash » pour la comparaison des méthodes numériques ; les conclusions sur précision/temps restent valides.
+
+**Limites communes**  
+Les trois méthodes comparent la **résolution numérique** du même modèle (BS).  
+Elles ne capturent pas le smile de volatilité, les sauts ou le coût de stockage des commodities.
+    """)
+
 with st.expander("Quand utiliser quelle méthode ?"):
     st.markdown("""
 | Situation | Méthode recommandée |
@@ -283,5 +364,5 @@ with st.expander("Quand utiliser quelle méthode ?"):
 st.caption(
     "Prix de référence = formule de Black-Scholes. "
     "Erreur = |prix méthode − prix BS|. "
-    "Code source : [option-pricing-comparison](https://github.com/Balthasargh/option-pricing-comparison)"
+    "Code : [option-pricing-comparison](https://github.com/Balthasargh/option-pricing-comparison)"
 )
