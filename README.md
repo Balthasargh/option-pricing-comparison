@@ -8,7 +8,46 @@ Ce dépôt compare **trois méthodes classiques** pour le pricing d'un call euro
 | **Monte Carlo**      | Simulation stochastique | Flexible (path-dependent, multi-actifs), erreur O(1/√N) |
 | **EDP (Crank-Nicolson)** | Différences finies   | Déterministe, convergence O(ΔS² + Δt²), adapté à la dim. 1 |
 
-## Interface utilisateur (Streamlit)
+Implémentations disponibles en **Python** (CLI + Streamlit) et en **C++** (CLI optimisé).
+
+---
+
+## Version C++
+
+```bash
+# Compilation
+make
+# ou : g++ -O3 -std=c++17 -o option_pricing option_pricing.cpp -lm
+
+# Exécution
+./option_pricing           # exemple vanilla S=K=100
+./option_pricing --btc     # Bitcoin
+./option_pricing --soja    # Soja (futures)
+./option_pricing --all     # les trois
+make run-btc               # via Makefile
+```
+
+### Performances typiques (C++ -O3)
+
+| Méthode | Vanilla (ms) | Bitcoin (ms) | Soja (ms) |
+|---------|--------------|--------------|-----------|
+| Formule BS | ~0.01–0.03 | ~0.01 | ~0.01 |
+| Monte Carlo 100k | ~3 | ~3 | ~3–4 |
+| Monte Carlo 500k | ~15–17 | ~16 | ~15 |
+| EDP 200×200 | ~0.5 | ~0.4 | ~0.5 |
+| EDP 400×400 | ~1.7 | ~1.7 | ~1.7 |
+
+→ **5–20× plus rapide** que l’équivalent Python pur pour Monte Carlo et EDP.
+
+Contenu C++ :
+- Formule Black-Scholes (CDF normale Abramowitz & Stegun)
+- Monte Carlo (Mersenne Twister, schéma exact log-normal)
+- EDP Crank-Nicolson + résolution tridiagonale (Thomas)
+- Presets Bitcoin et Soja intégrés
+
+---
+
+## Interface Python (Streamlit)
 
 ```bash
 pip install -r requirements.txt
@@ -23,18 +62,9 @@ streamlit run app.py
 | **Soja (ZS)** | ~12,78 USD/bu | 12,80 | ~2 mois | 21 % | Futures CBOT + CVOL / GARCH |
 | Personnalisé | libre | libre | libre | libre | — |
 
-Fonctionnalités :
-- Choix du preset + ajustement des paramètres
-- Affichage prix / erreur / temps pour les 3 méthodes
-- Tableau comparatif + courbes de convergence optionnelles
-- Notes sur les spécificités Bitcoin (jumps) et soja (futures / Black-76)
+---
 
-## Paramètres de l'option (exemple par défaut CLI)
-
-- Spot \( S_0 = 100 \), Strike \( K = 100 \), \( T = 1 \) an, \( r = 5\% \), \( \sigma = 20\% \)
-- Prix de référence BS : **10.450584**
-
-## Résultats numériques (script CLI)
+## Résultats numériques (Python CLI, vanilla)
 
 ```
 Méthode                          Prix        Erreur abs.    Temps (s)
@@ -59,6 +89,7 @@ EDP CN (M=400, N=400)         10.448114       0.002470     0.014342
 
 ### Temps de calcul
 - Formule quasi-instantanée ; EDP très efficace en dim. 1 ; Monte Carlo plus coûteux pour haute précision.
+- Version C++ nettement plus rapide pour les méthodes numériques.
 
 ### Quand utiliser quelle méthode ?
 
@@ -73,18 +104,24 @@ EDP CN (M=400, N=400)         10.448114       0.002470     0.014342
 ## Installation & exécution
 
 ```bash
+# Python
 pip install -r requirements.txt
-streamlit run app.py          # interface web
-python option_pricing.py      # benchmark CLI
+streamlit run app.py
+python option_pricing.py
+
+# C++
+make && ./option_pricing --btc
 ```
 
 ## Structure
 
 | Fichier | Description |
 |---------|-------------|
+| `option_pricing.cpp` | Implémentation C++ (CLI) |
+| `Makefile` | Compilation C++ |
 | `app.py` | Interface Streamlit + presets BTC / Soja |
-| `option_pricing.py` | Script CLI de benchmark |
-| `requirements.txt` | Dépendances |
+| `option_pricing.py` | Script CLI Python |
+| `requirements.txt` | Dépendances Python |
 
 ## Licence
 
