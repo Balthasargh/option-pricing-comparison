@@ -8,7 +8,23 @@ Ce dépôt compare **trois méthodes classiques** pour le pricing d'un call euro
 | **Monte Carlo**      | Simulation stochastique | Flexible (path-dependent, multi-actifs), erreur O(1/√N) |
 | **EDP (Crank-Nicolson)** | Différences finies   | Déterministe, convergence O(ΔS² + Δt²), adapté à la dim. 1 |
 
-## Paramètres de l'option
+## Interface utilisateur (Streamlit)
+
+Une interface web interactive est disponible :
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Fonctionnalités de l'UI :
+- Saisie des paramètres de l'option (spot, strike, maturité, taux, volatilité)
+- Choix du nombre de chemins Monte Carlo et de la taille de grille EDP
+- Affichage en temps réel des prix, erreurs et temps de calcul
+- Tableau comparatif
+- Courbes de convergence (optionnelles)
+
+## Paramètres de l'option (exemple par défaut)
 
 - Spot \( S_0 = 100 \)
 - Strike \( K = 100 \)
@@ -18,7 +34,7 @@ Ce dépôt compare **trois méthodes classiques** pour le pricing d'un call euro
 
 Prix de référence (formule de Black-Scholes) : **10.450584**
 
-## Résultats numériques
+## Résultats numériques (script CLI)
 
 ```
 Méthode                          Prix        Erreur abs.    Temps (s)
@@ -34,19 +50,19 @@ EDP CN (M=200, N=200)         10.440692       0.009892     0.006071
 EDP CN (M=400, N=400)         10.448114       0.002470     0.014342
 ```
 
-Le graphique de convergence (erreur et temps) est généré automatiquement par le script (`comparison_results.png`).
+Le graphique de convergence est généré par `python option_pricing.py`.
 
 ## Analyse
 
 ### Précision
 - **Formule de Black-Scholes** : exacte (erreur machine uniquement).
-- **Monte Carlo** : erreur statistique qui diminue en \( O(1/\sqrt{N}) \). Avec 500 000 chemins on atteint déjà une précision de l'ordre de \( 5\cdot10^{-4} \).
-- **EDP Crank-Nicolson** : erreur déterministe qui diminue en \( O(\Delta S^2 + \Delta t^2) \). Avec une grille 400×400 l'erreur est d'environ \( 2.5\cdot10^{-3} \).
+- **Monte Carlo** : erreur statistique qui diminue en \( O(1/\sqrt{N}) \).
+- **EDP Crank-Nicolson** : erreur déterministe qui diminue en \( O(\Delta S^2 + \Delta t^2) \).
 
 ### Temps de calcul
 - La formule est **quasi-instantanée** (< 2 ms).
-- L'EDP est très efficace en dimension 1 : une grille 400×400 prend ~14 ms.
-- Monte Carlo devient plus coûteux dès que l'on veut une précision élevée (500 k chemins ≈ 80 ms).
+- L'EDP est très efficace en dimension 1.
+- Monte Carlo devient plus coûteux pour une précision élevée.
 
 ### Quand utiliser quelle méthode ?
 
@@ -62,19 +78,27 @@ Le graphique de convergence (erreur et temps) est généré automatiquement par 
 
 ```bash
 # Dépendances
-pip install numpy scipy matplotlib
+pip install -r requirements.txt
 
-# Lancer la comparaison
+# Interface web interactive
+streamlit run app.py
+
+# Ou script en ligne de commande
 python option_pricing.py
 ```
 
-Le script affiche le tableau de résultats et génère le graphique `comparison_results.png`.
-
 ## Structure du code
 
+| Fichier | Description |
+|---------|-------------|
+| `app.py` | Interface Streamlit |
+| `option_pricing.py` | Script CLI de benchmark |
+| `requirements.txt` | Dépendances |
+
+Fonctions principales :
 - `black_scholes_call` : formule analytique
-- `monte_carlo_call` : simulation exacte (loi log-normale) avec estimateur d'écart-type
-- `pde_crank_nicolson_call` : schéma de Crank-Nicolson sur grille uniforme en \( S \), résolution par `scipy.linalg.solve_banded`
+- `monte_carlo_call` : simulation exacte (loi log-normale)
+- `pde_crank_nicolson_call` : schéma de Crank-Nicolson
 
 ## Licence
 
