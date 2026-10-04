@@ -10,29 +10,29 @@ Ce dépôt compare **trois méthodes classiques** pour le pricing d'un call euro
 
 ## Interface utilisateur (Streamlit)
 
-Une interface web interactive est disponible :
-
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Fonctionnalités de l'UI :
-- Saisie des paramètres de l'option (spot, strike, maturité, taux, volatilité)
-- Choix du nombre de chemins Monte Carlo et de la taille de grille EDP
-- Affichage en temps réel des prix, erreurs et temps de calcul
-- Tableau comparatif
-- Courbes de convergence (optionnelles)
+### Presets marché inclus
 
-## Paramètres de l'option (exemple par défaut)
+| Preset | Spot / Futures | Strike | Maturité | Vol | Source (début oct. 2026) |
+|--------|----------------|--------|----------|-----|--------------------------|
+| **Bitcoin (BTC)** | ~85 300 USD | 85 000 | 1 mois | 35 % | Spot + IV Deribit / réalisée |
+| **Soja (ZS)** | ~12,78 USD/bu | 12,80 | ~2 mois | 21 % | Futures CBOT + CVOL / GARCH |
+| Personnalisé | libre | libre | libre | libre | — |
 
-- Spot \( S_0 = 100 \)
-- Strike \( K = 100 \)
-- Maturité \( T = 1 \) an
-- Taux sans risque \( r = 5\% \)
-- Volatilité \( \sigma = 20\% \)
+Fonctionnalités :
+- Choix du preset + ajustement des paramètres
+- Affichage prix / erreur / temps pour les 3 méthodes
+- Tableau comparatif + courbes de convergence optionnelles
+- Notes sur les spécificités Bitcoin (jumps) et soja (futures / Black-76)
 
-Prix de référence (formule de Black-Scholes) : **10.450584**
+## Paramètres de l'option (exemple par défaut CLI)
+
+- Spot \( S_0 = 100 \), Strike \( K = 100 \), \( T = 1 \) an, \( r = 5\% \), \( \sigma = 20\% \)
+- Prix de référence BS : **10.450584**
 
 ## Résultats numériques (script CLI)
 
@@ -50,19 +50,15 @@ EDP CN (M=200, N=200)         10.440692       0.009892     0.006071
 EDP CN (M=400, N=400)         10.448114       0.002470     0.014342
 ```
 
-Le graphique de convergence est généré par `python option_pricing.py`.
-
 ## Analyse
 
 ### Précision
 - **Formule de Black-Scholes** : exacte (erreur machine uniquement).
-- **Monte Carlo** : erreur statistique qui diminue en \( O(1/\sqrt{N}) \).
-- **EDP Crank-Nicolson** : erreur déterministe qui diminue en \( O(\Delta S^2 + \Delta t^2) \).
+- **Monte Carlo** : erreur statistique \( O(1/\sqrt{N}) \).
+- **EDP Crank-Nicolson** : erreur déterministe \( O(\Delta S^2 + \Delta t^2) \).
 
 ### Temps de calcul
-- La formule est **quasi-instantanée** (< 2 ms).
-- L'EDP est très efficace en dimension 1.
-- Monte Carlo devient plus coûteux pour une précision élevée.
+- Formule quasi-instantanée ; EDP très efficace en dim. 1 ; Monte Carlo plus coûteux pour haute précision.
 
 ### Quand utiliser quelle méthode ?
 
@@ -77,28 +73,18 @@ Le graphique de convergence est généré par `python option_pricing.py`.
 ## Installation & exécution
 
 ```bash
-# Dépendances
 pip install -r requirements.txt
-
-# Interface web interactive
-streamlit run app.py
-
-# Ou script en ligne de commande
-python option_pricing.py
+streamlit run app.py          # interface web
+python option_pricing.py      # benchmark CLI
 ```
 
-## Structure du code
+## Structure
 
 | Fichier | Description |
 |---------|-------------|
-| `app.py` | Interface Streamlit |
+| `app.py` | Interface Streamlit + presets BTC / Soja |
 | `option_pricing.py` | Script CLI de benchmark |
 | `requirements.txt` | Dépendances |
-
-Fonctions principales :
-- `black_scholes_call` : formule analytique
-- `monte_carlo_call` : simulation exacte (loi log-normale)
-- `pde_crank_nicolson_call` : schéma de Crank-Nicolson
 
 ## Licence
 
